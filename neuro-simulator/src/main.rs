@@ -10,6 +10,7 @@ use iced::widget::text;
 use iced::widget::text_editor;
 use iced::widget::Column;
 use iced::Element;
+use iced::Font;
 use iced::Pixels;
 use iced::Subscription;
 use iced::Task;
@@ -216,7 +217,9 @@ fn view(state: &State) -> Element<Message> {
         state.selected_action.as_ref(),
         Message::ActionChanged,
     ));
-    let mut editor = text_editor(&state.content).on_action(Message::ActionEdit);
+    let mut editor = text_editor(&state.content)
+        .on_action(Message::ActionEdit)
+        .font(Font::MONOSPACE);
     if !state.content_valid {
         editor = editor.style(|theme: &Theme, status| text_editor::Style {
             value: iced::Color {
@@ -244,9 +247,13 @@ fn view(state: &State) -> Element<Message> {
         .actions
         .get(&state.selected_action.clone().unwrap_or_default())
     {
-        ret = ret.push(text(serde_json::to_string_pretty(&act.schema).unwrap()).size(Pixels(16.0)));
+        ret = ret.push(
+            text(serde_json::to_string_pretty(&act.schema).unwrap())
+                .size(Pixels(16.0))
+                .font(Font::MONOSPACE),
+        );
     }
-    ret.into()
+    iced::widget::scrollable(ret).into()
 }
 
 pub fn main() -> iced::Result {
