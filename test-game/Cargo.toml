@@ -1,0 +1,13 @@
+[package]
+name = "test-game"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+futures-util = "0.3.31"
+neuro-sama = { path = ".." }
+schemars = "0.8.21"
+serde = "1.0.215"
+tokio = { version = "1.42.0", features = ["rt", "macros", "sync", "time"] }
+tokio-tungstenite = "0.24.0"
+tungstenite = "0.24.0"

@@ -6,6 +6,7 @@ use crate::schema::{self, ClientCommandContents, ServerCommand};
 mod glue;
 
 pub use glue::{ActionMetadata, Actions};
+use thiserror::Error;
 
 /// A trait to be implemented by your game to create an [`Api`] object.
 ///
@@ -98,19 +99,43 @@ pub trait Game: Sized {
     /// return `Ok` even if you're returning an error message.
     fn handle_action<'a>(
         &self,
+        api: &Api<Self>,
         action: Self::Actions<'a>,
     ) -> Result<
         Option<impl 'static + Into<Cow<'static, str>>>,
         Option<impl 'static + Into<Cow<'static, str>>>,
     >;
+    /// Called when required by the game to reregister all available actions
+    fn reregister_actions(&self, api: &Api<Self>);
     /// Send a message to the WebSocket backend. If an error happens - I don't care, record it and
     /// try to reconnect or something.
-    fn send_command(&self, message: tungstenite::Message);
+    fn send_command(&self, api: &Api<Self>, message: tungstenite::Message);
+}
+
+/// An error that occured somewhere while sending/receiving a message.
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("json error: {0}")]
+    Json(
+        #[from]
+        #[source]
+        serde_json::Error,
+    ),
 }
 
 /// API object for... accessing the API.
+#[derive(Debug)]
 pub struct Api<G: Game> {
     game: Arc<G>,
+}
+
+impl<G: Game> Clone for Api<G> {
+    fn clone(&self) -> Self {
+        Self {
+            game: self.game.clone(),
+        }
+    }
 }
 
 pub trait Action: schemars::JsonSchema {
@@ -123,23 +148,25 @@ impl<G: Game> Api<G> {
     /// but that's fully intended because asynchronous action handling is theoretically allowed,
     /// since each action has a separate ID which means multiple parallel actions can happen at the
     /// same time.
-    pub fn new(game: Arc<G>) -> serde_json::Result<Self> {
+    pub fn new(game: Arc<G>) -> Result<Self, Error> {
         let ret = Self { game };
         ret.reinitialize()?;
         Ok(ret)
     }
     /// Reinitialize the API (sending the `startup` action).
-    ///
-    /// This message clears all previously registered actions for this game and does initial setup, and as such should be the very first message that you send.
-    pub fn reinitialize(&self) -> serde_json::Result<()> {
-        self.send_command(ClientCommandContents::Startup)
+    pub fn reinitialize(&self) -> Result<(), Error> {
+        let ret = self.send_command(ClientCommandContents::Startup);
+        if ret.is_ok() {
+            self.game.reregister_actions(self);
+        }
+        ret
     }
     /// This message can be sent to let Neuro know about something that is happening in game.
     pub fn context(
         &self,
         context: impl Into<Cow<'static, str>>,
         silent: bool,
-    ) -> serde_json::Result<()> {
+    ) -> Result<(), Error> {
         self.send_command(ClientCommandContents::Context {
             message: context.into(),
             silent,
@@ -181,41 +208,46 @@ impl<G: Game> Api<G> {
     /// // or
     /// api.unregister_actions::<Move>();
     /// ```
-    pub fn register_actions<A: ActionMetadata>(&self) -> serde_json::Result<()> {
+    pub fn register_actions<A: ActionMetadata>(&self) -> Result<(), Error> {
         self.register_actions_raw(A::actions())
     }
     /// Unregister actions. See `register_actions` for example use.
-    pub fn unregister_actions<A: ActionMetadata>(&self) -> serde_json::Result<()> {
+    pub fn unregister_actions<A: ActionMetadata>(&self) -> Result<(), Error> {
         self.unregister_actions_raw(A::names())
     }
     /// Directly call `actions/unregister`. You should typically use `unregister_actions` instead.
     pub fn unregister_actions_raw(
         &self,
         action_names: Vec<Cow<'static, str>>,
-    ) -> serde_json::Result<()> {
+    ) -> Result<(), Error> {
         self.send_command(ClientCommandContents::UnregisterActions { action_names })
     }
     /// Directly call `actions/register`. You should typically use `register_actions` instead.
-    pub fn register_actions_raw(&self, actions: Vec<schema::Action>) -> serde_json::Result<()> {
+    pub fn register_actions_raw(&self, actions: Vec<schema::Action>) -> Result<(), Error> {
         self.send_command(ClientCommandContents::RegisterActions { actions })
     }
-    fn send_command(&self, cmd: schema::ClientCommandContents) -> serde_json::Result<()> {
+    fn send_command(&self, cmd: schema::ClientCommandContents) -> Result<(), Error> {
         let data = serde_json::to_string(&schema::ClientCommand {
             command: cmd,
             game: G::NAME.into(),
         })?;
-        self.game.send_command(tungstenite::Message::text(data));
+        self.game
+            .send_command(self, tungstenite::Message::text(data));
         Ok(())
     }
     /// Notify the API object of a new websocket message. Note that this only handles `Text` and
     /// `Binary` messages, the rest are silently ignored.
-    pub fn notify_message(&self, message: tungstenite::Message) -> serde_json::Result<()> {
+    pub fn notify_message(&self, message: tungstenite::Message) -> Result<(), Error> {
         let message = match message {
             tungstenite::Message::Text(s) => serde_json::from_str(&s)?,
             tungstenite::Message::Binary(b) => serde_json::from_slice(&b)?,
             _ => return Ok(()),
         };
         let (id, res) = match message {
+            ServerCommand::ReregisterAllActions => {
+                self.game.reregister_actions(self);
+                return Ok(());
+            }
             ServerCommand::Action { id, name, data } => {
                 let res = if let Some(data) = data.as_ref().filter(|x| !x.is_empty()) {
                     json5::Deserializer::from_str(data)
@@ -240,7 +272,7 @@ impl<G: Game> Api<G> {
                         });
                     }
                 };
-                (id, self.game.handle_action(data))
+                (id, self.game.handle_action(self, data))
             }
         };
         let res = match res {
@@ -269,15 +301,29 @@ impl<G: Game> Api<G> {
     /// A builder object that can be used to configure the request further. After you've configured
     /// it, please send the request using the `.send()` method on the builder.
     #[must_use]
-    pub fn force_actions<S: Into<Cow<'static, str>>>(
+    pub fn force_actions<T: ActionMetadata>(
         &self,
-        query: impl Into<Cow<'static, str>>,
-        action_names: impl IntoIterator<Item = S>,
+        query: Cow<'static, str>,
     ) -> ForceActionsBuilder<G> {
         ForceActionsBuilder {
             api: self,
             state: None,
-            query: query.into(),
+            query,
+            ephemeral_context: None,
+            action_names: T::names(),
+        }
+    }
+    /// A version of `force_actions` that uses raw action names instead of type parameters.
+    #[must_use]
+    pub fn force_actions_raw(
+        &self,
+        query: Cow<'static, str>,
+        action_names: Vec<Cow<'static, str>>,
+    ) -> ForceActionsBuilder<G> {
+        ForceActionsBuilder {
+            api: self,
+            state: None,
+            query,
             ephemeral_context: None,
             action_names: action_names.into_iter().map(Into::into).collect(),
         }
@@ -305,7 +351,7 @@ impl<'a, G: Game> ForceActionsBuilder<'a, G> {
         self
     }
     /// Send the WebSocket message to the server.
-    pub fn send(self) -> serde_json::Result<()> {
+    pub fn send(self) -> Result<(), Error> {
         self.api
             .send_command(schema::ClientCommandContents::ForceActions {
                 state: self.state,

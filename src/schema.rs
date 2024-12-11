@@ -105,6 +105,8 @@ pub enum ServerCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<String>,
     },
+    #[serde(rename = "actions/reregister_all")]
+    ReregisterAllActions,
 }
 
 #[cfg(test)]

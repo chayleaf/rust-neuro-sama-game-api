@@ -16,6 +16,9 @@ with, it's available in the `game` submodule.
 ## Changelog
 
 - 0.1.0 - initial release
+- 0.2.0 - reworked the API a bit to make it easier to work with and more
+  semver-compatible, and added handling for the proposed
+  `actions/reregister_all` command.
 
 ## License
 
