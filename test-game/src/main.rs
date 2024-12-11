@@ -88,7 +88,12 @@ async fn main() {
                 .unwrap();
         }
     });
-    let mut ws = tokio_tungstenite::connect_async("ws://127.0.0.1:8000")
+    let mut ws =
+        tokio_tungstenite::connect_async(if let Ok(url) = std::env::var("NEURO_SDK_WS_URL") {
+            url
+        } else {
+            "ws://127.0.0.1:8000".to_owned()
+        })
         .await
         .unwrap()
         .0;
