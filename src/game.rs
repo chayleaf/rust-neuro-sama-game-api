@@ -305,13 +305,7 @@ impl<G: Game> Api<G> {
         &self,
         query: Cow<'static, str>,
     ) -> ForceActionsBuilder<G> {
-        ForceActionsBuilder {
-            api: self,
-            state: None,
-            query,
-            ephemeral_context: None,
-            action_names: T::names(),
-        }
+        self.force_actions_raw(query, T::names())
     }
     /// A version of `force_actions` that uses raw action names instead of type parameters.
     #[must_use]
@@ -325,7 +319,7 @@ impl<G: Game> Api<G> {
             state: None,
             query,
             ephemeral_context: None,
-            action_names: action_names.into_iter().map(Into::into).collect(),
+            action_names,
         }
     }
 }
