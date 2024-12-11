@@ -10,7 +10,7 @@ keywords = ["api", "gamedev", "json", "protocol"]
 categories = ["game-development"]
 
 [workspace]
-members = ["test-game", "neuro-sama-derive"]
+members = ["test-game", "neuro-sama-derive", "neuro-simulator"]
 
 [dependencies]
 json5 = "0.4.1"

@@ -1,0 +1,13 @@
+[package]
+name = "neuro-simulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = { version = "=0.13.0", features = ["tokio"] }
+toml = "0.8.19"
+neuro-sama = { path = ".." }
+tokio-tungstenite = "0.24.0"
+tokio = { version = "1.42.0", features = ["macros", "net", "sync"] }
+serde_json = "1.0.133"
+jsonschema = "0.26.1"
