@@ -6,6 +6,7 @@ use crate::schema::{self, ClientCommandContents, ServerCommand};
 mod glue;
 
 pub use glue::{ActionMetadata, Actions};
+use schemars::schema::{Schema, SchemaObject, SingleOrVec};
 use thiserror::Error;
 
 /// A trait to be implemented by your game to create an [`Api`] object.
@@ -143,6 +144,76 @@ pub trait Action: schemars::JsonSchema {
     fn description() -> &'static str;
 }
 
+fn cleanup_action(action: &mut schema::Action) {
+    fn visit_schema(schema: &mut Schema) {
+        match schema {
+            Schema::Object(obj) => visit_schema_obj(obj),
+            Schema::Bool(_) => {}
+        }
+    }
+    fn visit_schema_obj(schema: &mut SchemaObject) {
+        if let Some(meta) = schema.metadata.as_mut() {
+            meta.description = None;
+            meta.title = None;
+        }
+        if let Some(arr) = schema.array.as_mut() {
+            for x in arr.items.iter_mut() {
+                match x {
+                    SingleOrVec::Single(schema) => visit_schema(schema),
+                    SingleOrVec::Vec(schemas) => {
+                        for schema in schemas {
+                            visit_schema(schema);
+                        }
+                    }
+                }
+            }
+            for x in arr
+                .contains
+                .iter_mut()
+                .chain(arr.additional_items.iter_mut())
+            {
+                visit_schema(x);
+            }
+        }
+        if let Some(obj) = schema.object.as_mut() {
+            for schema in obj
+                .properties
+                .values_mut()
+                .chain(obj.pattern_properties.values_mut())
+                .chain(
+                    obj.additional_properties
+                        .iter_mut()
+                        .chain(obj.property_names.iter_mut())
+                        .map(|x| &mut **x),
+                )
+            {
+                visit_schema(schema);
+            }
+        }
+        if let Some(sub) = schema.subschemas.as_mut() {
+            for schema in sub
+                .all_of
+                .iter_mut()
+                .chain(sub.any_of.iter_mut())
+                .chain(sub.one_of.iter_mut())
+                .flat_map(|x| x.iter_mut())
+                .chain(
+                    sub.not
+                        .iter_mut()
+                        .chain(sub.if_schema.iter_mut())
+                        .chain(sub.then_schema.iter_mut())
+                        .chain(sub.else_schema.iter_mut())
+                        .map(|x| &mut **x),
+                )
+            {
+                visit_schema(schema);
+            }
+        }
+    }
+    action.schema.meta_schema = None;
+    visit_schema_obj(&mut action.schema.schema);
+}
+
 impl<G: Game> Api<G> {
     /// Create a new API object. This takes an `Arc` of your game, this forces it to not be mutable
     /// but that's fully intended because asynchronous action handling is theoretically allowed,
@@ -209,7 +280,11 @@ impl<G: Game> Api<G> {
     /// api.unregister_actions::<Move>();
     /// ```
     pub fn register_actions<A: ActionMetadata>(&self) -> Result<(), Error> {
-        self.register_actions_raw(A::actions())
+        let mut actions = A::actions();
+        for action in &mut actions {
+            cleanup_action(action);
+        }
+        self.register_actions_raw(actions)
     }
     /// Unregister actions. See `register_actions` for example use.
     pub fn unregister_actions<A: ActionMetadata>(&self) -> Result<(), Error> {
@@ -360,14 +435,19 @@ impl<'a, G: Game> ForceActionsBuilder<'a, G> {
 mod test {
     use serde::Deserialize;
 
-    use crate::{self as neuro_sama, game::ActionMetadata};
+    use crate::{
+        self as neuro_sama,
+        game::{cleanup_action, ActionMetadata},
+    };
 
+    /// Move action
     #[derive(Debug, schemars::JsonSchema, Deserialize, PartialEq)]
     struct Move {
         x: u32,
         y: u32,
     }
 
+    /// Shoot action
     #[derive(Debug, schemars::JsonSchema, Deserialize, PartialEq)]
     struct Shoot;
 
@@ -390,15 +470,17 @@ mod test {
         let mut deser = json5::Deserializer::from_str(r#"null"#).unwrap();
         let action = <Action as Actions>::deserialize("shoot", &mut deser).unwrap();
         assert_eq!(action, Action::Shoot(Shoot));
+        let mut actions = <Action as ActionMetadata>::actions();
+        for action in &mut actions {
+            cleanup_action(action);
+        }
         assert_eq!(
-            serde_json::to_string(&<Action as ActionMetadata>::actions()).unwrap(),
+            serde_json::to_string(&actions).unwrap(),
             r#"[
               {
                 "name": "move",
                 "description": "test 1",
                 "schema": {
-                  "$schema": "http://json-schema.org/draft-07/schema#",
-                  "title": "Move",
                   "type": "object",
                   "required": [ "x", "y" ],
                   "properties": {
@@ -411,8 +493,6 @@ mod test {
                 "name": "shoot",
                 "description": "test 2",
                 "schema": {
-                  "$schema": "http://json-schema.org/draft-07/schema#",
-                  "title": "Shoot",
                   "type": "null"
                 }
               }
