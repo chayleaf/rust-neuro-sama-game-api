@@ -13,6 +13,10 @@ API simply defines the API schema, it's available in the `schema`
 submodule. The high-level API is hopefully easier and safer to work
 with, it's available in the `game` submodule.
 
+Optionally, a `proposals` feature is available that enables proposed
+commands that have not yet been accepted or implemented - you can use it
+for testing, but the feature is excluded from semver guarantees.
+
 ## Changelog
 
 - 0.1.0 - initial release
@@ -20,6 +24,7 @@ with, it's available in the `game` submodule.
   semver-compatible, and added handling for the proposed
   `actions/reregister_all` command.
 - 0.2.1 - generate a leaner JSON schema that's hopefully less confusing
+- 0.3.0 - add a `proposals` feature.
 
 ## License
 

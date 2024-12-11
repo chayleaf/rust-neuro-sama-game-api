@@ -1,4 +1,4 @@
-//! The schema as described in https://github.com/VedalAI/neuro-game-sdk/blob/31e36c1a479faa256896a3e172c8d5a96bd462c6/API/SPECIFICATION.md
+//! The schema as described in [the specification](https://github.com/VedalAI/neuro-game-sdk/blob/31e36c1a479faa256896a3e172c8d5a96bd462c6/API/SPECIFICATION.md).
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
@@ -78,6 +78,15 @@ pub enum ClientCommandContents {
         /// A plaintext message that describes what happened when the action was executed. If not successful, this should be an error message. If successful, this can either be empty, or provide a *small* context to Neuro regarding the action she just took (e.g. `"Remember to not share this with anyone."`). **This information will be directly received by Neuro.**
         message: Option<Cow<'static, str>>,
     },
+    /// This message should be sent as a response to a graceful or an imminent shutdown request, after progress has been saved. After this is sent, Neuro will close the game herself by terminating the process, so to reiterate you must definitely ensure that progress has already been saved.
+    ///
+    /// # Note
+    ///
+    /// This is part of the game automation API, which will only be used for games that Neuro can launch by herself.
+    /// As such, most games will not need to implement this.
+    #[cfg(feature = "proposals")]
+    #[serde(rename = "shutdown/ready")]
+    ShutdownReady,
 }
 
 /// A client to server (game to Neuro) message.
@@ -105,8 +114,35 @@ pub enum ServerCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<String>,
     },
+    /// If there is a problem mid-game and Neuro crashes, upon reconnection this message might be sent in order to reregister all actions that were previously registered. You should respond to this with an actions register containing all actions that are currently supposed to be registered.
+    #[cfg(feature = "proposals")]
     #[serde(rename = "actions/reregister_all")]
     ReregisterAllActions,
+    /// This message will be sent when Neuro decides to stop playing a game, or upon manual intervention from the dashboard. You should create or identify graceful shutdown points where the game can be closed gracefully after saving progress. You should store the latest received `wants_shutdown` value, and if it is `true{} when a graceful shutdown point is reached, you should save the game and quit to main menu, then send back a shutdown ready message.
+    ///
+    /// # Note
+    ///
+    /// This is part of the game automation API, which will only be used for games that Neuro can launch by herself.
+    /// As such, most games will not need to implement this.
+    ///
+    /// **Please don't actually close the game, just quit to main menu. Neuro will close the game herself.**
+    #[cfg(feature = "proposals")]
+    #[serde(rename = "shutdown/graceful")]
+    GracefulShutdown {
+        /// Whether the game should shutdown at the next graceful shutdown point. `true` means shutdown is requested, `false` means to cancel the previous shutdown request.
+        wants_shutdown: bool,
+    },
+    /// This message will be sent when the game needs to be shutdown immediately. You have only a handful of seconds to save as much progress as possible. After you have saved, you can send back a shutdown ready message.
+    ///
+    /// # Note
+    ///
+    /// This is part of the game automation API, which will only be used for games that Neuro can launch by herself.
+    /// As such, most games will not need to implement this.
+    ///
+    /// **Please don't actually close the game, just save the current progress that can be saved. Neuro will close the game herself.**
+    #[cfg(feature = "proposals")]
+    #[serde(rename = "shutdown/immediate")]
+    ImmediateShutdown,
 }
 
 #[cfg(test)]

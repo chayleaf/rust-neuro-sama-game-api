@@ -10,6 +10,8 @@ use crate::schema;
 
 use super::Action;
 
+/// A trait that has to be implemented by action enums. It can be automatically implemented with
+/// `#[derive(neuro_sama::derive::Actions)]`.
 pub trait Actions<'de>: Sized {
     fn deserialize<D: Deserializer<'de>>(discriminant: &str, de: D) -> Result<Self, D::Error>;
 }
@@ -182,10 +184,17 @@ impl<'de, T: 'de + Deserialize<'de>> Actions<'de> for T {
     }
 }
 
+/// A trait that has to be implemented by sets of type-level action metadata. A set of action
+/// metadata is something that you can register or unregister to tell Neuro which actions are or
+/// aren't available. To put it simpy, this trait is implemented by actions, action enums, and
+/// tuples of actions, and by passing any type that implements this trait as the type parameter to
+/// `register_action` or `unregister_action`, you can register/unregister actions in a type-safe
+/// way.
 pub trait ActionMetadata {
     fn actions() -> Vec<schema::Action>;
     fn names() -> Vec<Cow<'static, str>>;
 }
+
 impl<T: Action> ActionMetadata for T {
     fn actions() -> Vec<schema::Action> {
         vec![schema::Action {

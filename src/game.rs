@@ -75,7 +75,7 @@ use thiserror::Error;
 /// }
 /// ```
 pub trait Game: Sized {
-    /// The game's display name.
+    /// The game's display name, including any spaces and symbols (e.g. `"Buckshot Roulette"`).
     const NAME: &'static str;
     /// A enum with all the action types that Neuro can pass to the game.
     ///
@@ -88,16 +88,18 @@ pub trait Game: Sized {
     ///
     /// # Parameters
     ///
+    /// - `api` - the API this action came from
     /// - `action` - the action that Neuro passed to the game.
     ///
     /// # Returns
     ///
-    /// A result with an optional associated message to pass to Neuro.
+    /// A result with an optional associated message to pass to Neuro. The result should be
+    /// returned as soon as possible, usually before actually executing the action in-game.
     ///
     /// # Note
     ///
     /// If you return `Err` on a forced action, Neuro will try again. If you don't want that, just
-    /// return `Ok` even if you're returning an error message.
+    /// return `Ok` with an error message.
     fn handle_action<'a>(
         &self,
         api: &Api<Self>,
@@ -108,8 +110,27 @@ pub trait Game: Sized {
     >;
     /// Called when required by the game to reregister all available actions
     fn reregister_actions(&self, api: &Api<Self>);
-    /// Send a message to the WebSocket backend. If an error happens - I don't care, record it and
-    /// try to reconnect or something.
+    #[cfg(feature = "proposals")]
+    /// You should create or identify graceful shutdown points where the game can be closed gracefully after saving progress. You should store the latest received wants_shutdown value, and if it is true when a graceful shutdown point is reached, you should save the game and quit to main menu, then send back a shutdown ready message. Don't close the game entirely.
+    ///
+    /// # Note
+    ///
+    /// This is part of the game automation API, which will only be used for games that Neuro can launch by herself. As such, most games will not need to implement this.
+    fn graceful_shutdown_wanted(&self, api: &Api<Self>, wants_shutdown: bool) {
+        let _ = (api, wants_shutdown);
+    }
+    #[cfg(feature = "proposals")]
+    /// This message will be sent when the game needs to be shutdown immediately. You have only a handful of seconds to save as much progress as possible. After you have saved, you can send back a shutdown ready message (don't close the game by yourself).
+    ///
+    /// # Note
+    ///
+    /// This is part of the game automation API, which will only be used for games that Neuro can launch by herself. As such, most games will not need to implement this.
+    fn immediate_shutdown(&self, api: &Api<Self>) {
+        let _ = api;
+    }
+    /// Send a message to the WebSocket backend. If an error happens, you can handle it by
+    /// attempting to reopen the connection and calling `reinitialize` on the API after a
+    /// reconnect.
     fn send_command(&self, api: &Api<Self>, message: tungstenite::Message);
 }
 
@@ -117,6 +138,7 @@ pub trait Game: Sized {
 #[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum Error {
+    /// A JSON error
     #[error("json error: {0}")]
     Json(
         #[from]
@@ -125,7 +147,7 @@ pub enum Error {
     ),
 }
 
-/// API object for... accessing the API.
+/// API object for... accessing the API. Note that this can be cheaply cloned.
 #[derive(Debug)]
 pub struct Api<G: Game> {
     game: Arc<G>,
@@ -139,8 +161,15 @@ impl<G: Game> Clone for Api<G> {
     }
 }
 
+/// A trait that has to be implemented by actions. It is automatically implemented when you create
+/// an enum for all actions with `#[derive(neuro_sama::derive::Actions)]`.
+///
+/// Note that while there aren't any hard limitations on how complex the JSON schema can be, Neuro
+/// might get confused if it's too complex.
 pub trait Action: schemars::JsonSchema {
+    /// The name of the action, which is its *unique identifier*. This should be a lowercase string, with words separated by underscores or dashes (e.g. `"join_friend_lobby"`, `"use_item"`).
     fn name() -> &'static str;
+    /// A plaintext description of what this action does. **This information will be directly received by Neuro.**
     fn description() -> &'static str;
 }
 
@@ -319,10 +348,6 @@ impl<G: Game> Api<G> {
             _ => return Ok(()),
         };
         let (id, res) = match message {
-            ServerCommand::ReregisterAllActions => {
-                self.game.reregister_actions(self);
-                return Ok(());
-            }
             ServerCommand::Action { id, name, data } => {
                 let res = if let Some(data) = data.as_ref().filter(|x| !x.is_empty()) {
                     json5::Deserializer::from_str(data)
@@ -348,6 +373,21 @@ impl<G: Game> Api<G> {
                     }
                 };
                 (id, self.game.handle_action(self, data))
+            }
+            #[cfg(feature = "proposals")]
+            ServerCommand::ReregisterAllActions => {
+                self.game.reregister_actions(self);
+                return Ok(());
+            }
+            #[cfg(feature = "proposals")]
+            ServerCommand::GracefulShutdown { wants_shutdown } => {
+                self.game.graceful_shutdown_wanted(self, wants_shutdown);
+                return Ok(());
+            }
+            #[cfg(feature = "proposals")]
+            ServerCommand::ImmediateShutdown => {
+                self.game.immediate_shutdown(self);
+                return Ok(());
             }
         };
         let res = match res {
