@@ -1,0 +1,24 @@
+[package]
+name = "neuro-sama"
+version = "0.1.0"
+edition = "2021"
+authors = ["chayleaf <chayleaf-cratesio@pavluk.org>"]
+description = "A crate that implements the Neuro-sama game API"
+repository = "https://github.com/chayleaf/rust-neuro-sama-game-api/"
+license = "0BSD OR MIT OR Apache-2.0"
+keywords = ["api", "gamedev", "json", "protocol"]
+categories = ["game-development"]
+
+[workspace]
+members = ["neuro-sama-derive"]
+
+[dependencies]
+json5 = "0.4.1"
+schemars = { version = "0.8.21", default-features = false }
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
+tungstenite = { version = "0.24.0", default-features = false }
+neuro-sama-derive = { version = "0.1.0", path = "./neuro-sama-derive" }
+
+[dev-dependencies]
+schemars = "0.8.21"
