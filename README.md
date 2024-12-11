@@ -19,6 +19,7 @@ with, it's available in the `game` submodule.
 - 0.2.0 - reworked the API a bit to make it easier to work with and more
   semver-compatible, and added handling for the proposed
   `actions/reregister_all` command.
+- 0.2.1 - generate a leaner JSON schema that's hopefully less confusing
 
 ## License
 
