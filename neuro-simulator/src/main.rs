@@ -25,9 +25,9 @@ struct State {
     content_valid: bool,
     id_counter: AtomicU32,
     actions: BTreeMap<String, neuro_sama::schema::Action>,
-    // contains (sent id, query, action_names, state, ephemeral)
+    // contains (sent id, query, action_names, state)
     #[allow(clippy::type_complexity)]
-    force_query: Option<(Option<String>, String, Vec<String>, Option<String>, bool)>,
+    force_query: Option<(Option<String>, String, Vec<String>, Option<String>)>,
     tx: tokio::sync::mpsc::UnboundedSender<MessageBack>,
     context: (String, bool),
     state: String,
@@ -89,12 +89,14 @@ fn update(state: &mut State, message: Message) {
                         state.selected_action = None;
                     }
                 }
+                if !ephemeral_context.unwrap_or_default() {
+                    state.state = state1.clone().map(|x| x.into_owned()).unwrap_or_default();
+                }
                 state.force_query = Some((
                     None,
                     query.to_string(),
                     action_names.into_iter().map(Into::into).collect(),
                     state1.map(Into::into),
-                    ephemeral_context.unwrap_or_default(),
                 ));
             }
             ClientCommandContents::Startup => {}
@@ -180,7 +182,7 @@ fn update(state: &mut State, message: Message) {
 
 fn view(state: &State) -> Element<Message> {
     let mut ret = Column::new().padding(20).spacing(20);
-    if let Some((_id, query, _action_names, state, _ephemeral)) = &state.force_query {
+    if let Some((_id, query, _action_names, state)) = &state.force_query {
         ret = ret.push(text(format!("force action awaiting reply: {query}")));
         ret = ret.push_maybe(
             state
