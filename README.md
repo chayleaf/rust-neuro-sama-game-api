@@ -25,6 +25,7 @@ for testing, but the feature is excluded from semver guarantees.
   `actions/reregister_all` command.
 - 0.2.1 - generate a leaner JSON schema that's hopefully less confusing
 - 0.3.0 - add a `proposals` feature.
+- 0.3.1 - don't require `Arc` for `Api::new`
 
 ## License
 

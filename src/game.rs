@@ -1,5 +1,5 @@
 //! A high(er) level API that utilizes the Rust type system for somewhat better ergonomics.
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, ops::Deref};
 
 use crate::schema::{self, ClientCommandContents, ServerCommand};
 
@@ -145,6 +145,49 @@ pub trait Game: Sized {
     fn send_command(&self, api: &Api<Self>, message: tungstenite::Message);
 }
 
+fn wrap_fn<'b, G: Game, R, F: FnOnce(&'b G, &'b Api<G>) -> R>(game: &'b G, func: F) -> R {
+    // SAFETY: Api only consists of G and is repr(transparent), we don't change reference
+    // mutability or lifetime
+    let api_ref: &'b Api<G> = unsafe { std::mem::transmute(game) };
+    func(game, api_ref)
+}
+
+impl<G: Game, T: Deref<Target = G>> Game for T {
+    const NAME: &'static str = G::NAME;
+    type Actions<'a> = G::Actions<'a>;
+
+    fn handle_action<'a>(
+        &self,
+        _api: &Api<Self>,
+        action: Self::Actions<'a>,
+    ) -> Result<
+        Option<impl 'static + Into<Cow<'static, str>>>,
+        Option<impl 'static + Into<Cow<'static, str>>>,
+    > {
+        wrap_fn(self.deref(), |game, api| {
+            game.handle_action(api, action)
+                .map(|x| x.map(Into::into))
+                .map_err(|x| x.map(Into::into))
+        })
+    }
+    fn reregister_actions(&self, _api: &Api<Self>) {
+        wrap_fn(self.deref(), |game, api| game.reregister_actions(api))
+    }
+    #[cfg(feature = "proposals")]
+    fn graceful_shutdown_wanted(&self, _api: &Api<Self>, wants_shutdown: bool) {
+        wrap_fn(self.deref(), |game, api| {
+            game.graceful_shutdown_wanted(api, wants_shutdown)
+        })
+    }
+    #[cfg(feature = "proposals")]
+    fn immediate_shutdown(&self, _api: &Api<Self>) {
+        wrap_fn(self.deref(), |game, api| game.immediate_shutdown(api))
+    }
+    fn send_command(&self, _api: &Api<Self>, message: tungstenite::Message) {
+        wrap_fn(self.deref(), |game, api| game.send_command(api, message))
+    }
+}
+
 /// An error that occured somewhere while sending/receiving a message.
 #[non_exhaustive]
 #[derive(Debug, Error)]
@@ -159,17 +202,11 @@ pub enum Error {
 }
 
 /// API object for... accessing the API. Note that this can be cheaply cloned.
-#[derive(Debug)]
+// this must be repr(transparent) - see the safety comment above
+#[repr(transparent)]
+#[derive(Clone, Debug)]
 pub struct Api<G: Game> {
-    game: Arc<G>,
-}
-
-impl<G: Game> Clone for Api<G> {
-    fn clone(&self) -> Self {
-        Self {
-            game: self.game.clone(),
-        }
-    }
+    game: G,
 }
 
 /// A trait that has to be implemented by actions. It is automatically implemented when you create
@@ -257,11 +294,12 @@ fn cleanup_action(action: &mut schema::Action) {
 }
 
 impl<G: Game> Api<G> {
-    /// Create a new API object. This takes an `Arc` of your game, this forces it to not be mutable
-    /// but that's fully intended because asynchronous action handling is theoretically allowed,
-    /// since each action has a separate ID which means multiple parallel actions can happen at the
-    /// same time.
-    pub fn new(game: Arc<G>) -> Result<Self, Error> {
+    /// Create a new API object. This takes ownership of your game, but you can pass an `Arc` of
+    /// your game, since `Arc` implements `Game` as well. All of the methods on this struct use an
+    /// immutable reference, so the `game` object is never mutated either - that's fully intended,
+    /// because asynchronous action handling is theoretically allowed, since each action has a
+    /// separate ID which means multiple parallel actions can happen at the same time.
+    pub fn new(game: G) -> Result<Self, Error> {
         let ret = Self { game };
         ret.reinitialize()?;
         Ok(ret)

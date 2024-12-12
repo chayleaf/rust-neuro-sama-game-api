@@ -14,6 +14,6 @@ pub use neuro_sama_derive as derive;
 pub mod game;
 pub mod schema;
 #[doc(hidden)]
-pub use serde;
-#[doc(hidden)]
 pub use schemars;
+#[doc(hidden)]
+pub use serde;
