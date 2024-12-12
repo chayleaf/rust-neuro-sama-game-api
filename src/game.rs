@@ -5,8 +5,8 @@
 //!
 //! If you require mutable access to your game object, you should use the [`GameMut`] trait
 //! instead - then you can use the [`ApiMut`] trait, which is exactly the same as [`Api`], except
-//! it takes takes a mutable reference, allowing you to mutate the object. You don't have to
-//! implement both.
+//! it takes a mutable reference, allowing you to mutate the object. You don't have to implement
+//! both.
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
