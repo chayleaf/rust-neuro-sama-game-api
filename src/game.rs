@@ -34,6 +34,11 @@ use thiserror::Error;
 /// // actions should have for Neuro - the API documentation says:
 /// //
 /// // > This should be a lowercase string, with words separated by underscores or dashes.
+/// //
+/// // By default, for each struct/enum that the command consists of, `title` is set to the struct
+/// // name and `description` is set to the doc comment. However, this library currently strips
+/// // that to make the schema smaller and potentially less confusing. If you think that this can
+/// // actually help make the schema more understandable in some cases, feel free to open an issue.
 /// #[derive(Debug, neuro_sama::derive::Actions)]
 /// enum Action {
 ///     /// Make a move, placing your mark on the field at a specified position.
