@@ -201,7 +201,8 @@ pub enum Error {
     ),
 }
 
-/// API object for... accessing the API. Note that this can be cheaply cloned.
+/// API object for... accessing the API. It takes ownership of the `Game` object, but doesn't store
+/// any state by itself. State handling is up to you.
 // this must be repr(transparent) - see the safety comment above
 #[repr(transparent)]
 #[derive(Clone, Debug)]
