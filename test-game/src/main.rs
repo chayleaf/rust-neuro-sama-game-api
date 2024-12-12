@@ -44,16 +44,15 @@ enum Action {
 impl neuro_sama::game::Game for TestGame {
     const NAME: &'static str = "Test Game";
     type Actions<'a> = Action;
-    fn send_command(&self, _api: &Api<Self>, message: tungstenite::Message) {
+    fn send_command(&self, message: tungstenite::Message) {
         let _ = self.0.send(message);
     }
-    fn reregister_actions(&self, api: &Api<Self>) {
+    fn reregister_actions(&self) {
         // your game could have some complicated logic here i guess
-        api.register_actions::<Action>().unwrap();
+        self.register_actions::<Action>().unwrap();
     }
     fn handle_action<'a>(
         &self,
-        _api: &Api<Self>,
         action: Self::Actions<'a>,
     ) -> Result<
         Option<impl 'static + Into<std::borrow::Cow<'static, str>>>,
@@ -77,12 +76,13 @@ impl neuro_sama::game::Game for TestGame {
 async fn main() {
     let (game2ws_tx, mut game2ws_rx) = mpsc::unbounded_channel();
     let game = Arc::new(TestGame(game2ws_tx));
-    let api = Api::new(game.clone()).unwrap();
-    let api1 = api.clone();
+    game.initialize().unwrap();
+    let game1 = game.clone();
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(20)).await;
-            api1.force_actions::<Action>("do your thing".into())
+            game1
+                .force_actions::<Action>("do your thing".into())
                 .with_state("some state idk")
                 .send()
                 .unwrap();
@@ -117,7 +117,7 @@ async fn main() {
                 let Ok(msg) = msg else {
                     continue;
                 };
-                if let Err(err) = api.notify_message(msg) {
+                if let Err(err) = game.handle_message(msg) {
                     // this could happen because we don't know what this message means (e.g. added
                     // in a new version of the API)
                     println!("notify_message failed: {err}");

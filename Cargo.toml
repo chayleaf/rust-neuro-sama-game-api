@@ -1,6 +1,6 @@
 [package]
 name = "neuro-sama"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 authors = ["chayleaf <chayleaf-cratesio@pavluk.org>"]
 description = "A crate that implements the Neuro-sama game API"
@@ -18,7 +18,7 @@ schemars = { version = "0.8.21", default-features = false }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 tungstenite = { version = "0.24.0", default-features = false }
-neuro-sama-derive = { version = "0.1.0", path = "./neuro-sama-derive" }
+neuro-sama-derive = { version = "0.1.1", path = "./neuro-sama-derive" }
 thiserror = "2.0.6"
 
 [dev-dependencies]
