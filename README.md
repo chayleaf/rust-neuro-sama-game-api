@@ -27,6 +27,7 @@ for testing, but the feature is excluded from semver guarantees.
 - 0.3.0 - add a `proposals` feature.
 - 0.3.1 - don't require `Arc` for `Api::new`
 - 0.4.0 - convert `Api` from a separate object into a sealed trait
+- 0.4.1 - interpret whitespace-only messages as null
 
 ## License
 

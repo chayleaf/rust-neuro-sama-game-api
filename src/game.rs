@@ -349,27 +349,10 @@ impl<T: GameMut> ApiMut for T {}
 /// and [`Api::handle_message`] for handling incoming WebSocket messages.
 #[neuro_sama_derive::generic_mutability(ApiMut, GameMut)]
 pub trait Api: Game {
-    /// Tell Neuro to execute one of the listed actions as soon as possible. Note that this might take a bit if she is already talking.
-    ///
-    /// # Parameters
-    ///
-    /// - `query` - A plaintext message that tells Neuro what she is currently supposed to be doing (e.g. `"It is now your turn. Please perform an action. If you want to use any items, you should use them before picking up the shotgun."`). **This information will be directly received by Neuro.**
-    /// - `action_names` - The names of the actions that Neuro should choose from.
-    ///
-    /// # Returns
-    ///
-    /// A builder object that can be used to configure the request further. After you've configured
-    /// it, please send the request using the `.send()` method on the builder.
-    #[must_use]
-    fn force_actions<T: ActionMetadata>(
-        &self,
-        query: Cow<'static, str>,
-    ) -> ForceActionsBuilder<Self> {
-        self.force_actions_raw(query, T::names())
-    }
     /// Reinitialize the API (sending the `startup` action and reregistering all actions).
     ///
-    /// **This *must* be called before using any other method from [`Api`]**
+    /// **This *must* be called before using any other method from [`Api`]**, and also whenever the
+    /// WebSocket connection is reopened.
     ///
     /// Sadly, this isn't enforced in the type system, because the typestate pattern would be quite
     /// bulky here, and this isn't enforced in runtime because traits don't have any state - so
@@ -386,6 +369,11 @@ pub trait Api: Game {
     }
 
     /// This message can be sent to let Neuro know about something that is happening in game.
+    ///
+    /// # Parameters
+    ///
+    /// - `context` - a plaintext message that describes what is happening in the game. **This information will be directly received by Neuro.**
+    /// - `silent` - if `true`, the message will be added to Neuro's context without prompting her to respond to it. If `false`, Neuro might respond to the message directly, unless she is busy talking to someone else or to chat.
     fn context(&self, context: impl Into<Cow<'static, str>>, silent: bool) -> Result<(), Error> {
         send_ws_command(
             self,
@@ -468,7 +456,7 @@ pub trait Api: Game {
         };
         let (id, res) = match message {
             ServerCommand::Action { id, name, data } => {
-                let res = data.as_ref().filter(|x| !x.is_empty()).map_or_else(
+                let res = data.as_ref().filter(|x| !x.trim().is_empty()).map_or_else(
                     || {
                         <Self::Actions<'_> as Actions>::deserialize(
                             &name,
@@ -530,6 +518,25 @@ pub trait Api: Game {
             },
         };
         send_ws_command(self, res)
+    }
+
+    /// Tell Neuro to execute one of the listed actions as soon as possible. Note that this might take a bit if she is already talking.
+    ///
+    /// # Parameters
+    ///
+    /// - `query` - a plaintext message that tells Neuro what she is currently supposed to be doing (e.g. `"It is now your turn. Please perform an action. If you want to use any items, you should use them before picking up the shotgun."`). **This information will be directly received by Neuro.**
+    /// - `action_names` - the names of the actions that Neuro should choose from.
+    ///
+    /// # Returns
+    ///
+    /// A builder object that can be used to configure the request further. After you've configured
+    /// it, please send the request using the `.send()` method on the builder.
+    #[must_use]
+    fn force_actions<T: ActionMetadata>(
+        &self,
+        query: Cow<'static, str>,
+    ) -> ForceActionsBuilder<Self> {
+        self.force_actions_raw(query, T::names())
     }
 
     /// A version of [`Api::force_actions`] that uses raw action names instead of type parameters.
