@@ -421,11 +421,15 @@ pub trait Api: Game {
     /// api.unregister_actions::<Move>();
     /// ```
     fn register_actions<A: ActionMetadata>(&self) -> Result<(), Error> {
-        let mut actions = A::actions();
+        self.register_actions_raw(A::actions())
+    }
+
+    /// Directly call `actions/register`. You should typically use [`Api::register_actions`] instead.
+    fn register_actions_raw(&self, mut actions: Vec<schema::Action>) -> Result<(), Error> {
         for action in &mut actions {
             cleanup_action(action);
         }
-        self.register_actions_raw(actions)
+        send_ws_command(self, ClientCommandContents::RegisterActions { actions })
     }
 
     /// Unregister actions. See [`Api::register_actions`] for example use.
@@ -439,11 +443,6 @@ pub trait Api: Game {
             self,
             ClientCommandContents::UnregisterActions { action_names },
         )
-    }
-
-    /// Directly call `actions/register`. You should typically use [`Api::register_actions`] instead.
-    fn register_actions_raw(&self, actions: Vec<schema::Action>) -> Result<(), Error> {
-        send_ws_command(self, ClientCommandContents::RegisterActions { actions })
     }
 
     /// Handle a new websocket message. Note that this only handles `Text` and `Binary` messages,

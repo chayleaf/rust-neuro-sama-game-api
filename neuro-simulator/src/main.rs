@@ -100,7 +100,17 @@ fn update(state: &mut State, message: Message) {
                     state1.map(Into::into),
                 ));
             }
-            ClientCommandContents::Startup => {}
+            ClientCommandContents::Startup => {
+                state.selected_action = None;
+                state.actions.clear();
+                state.force_query = None;
+                state.content_valid = false;
+                state.action = combo_box::State::default();
+                state.context.1 = false;
+                state.context.0.clear();
+                state.state.clear();
+                state.last_message.clear();
+            }
             ClientCommandContents::Context { message, silent } => {
                 state.context = (message.into_owned(), silent);
             }
