@@ -321,7 +321,7 @@ fn cleanup_action(action: &mut schema::Action) {
 }
 
 fn send_ws_command<G: Game>(game: &G, cmd: schema::ClientCommandContents) -> Result<(), Error> {
-    let data = serde_json::to_string(&schema::ClientCommand {
+    let data = crate::to_string(&schema::ClientCommand {
         command: cmd,
         game: G::NAME.into(),
     })?;
@@ -333,7 +333,7 @@ fn send_ws_command_mut<G: GameMut>(
     game: &mut G,
     cmd: schema::ClientCommandContents,
 ) -> Result<(), Error> {
-    let data = serde_json::to_string(&schema::ClientCommand {
+    let data = crate::to_string(&schema::ClientCommand {
         command: cmd,
         game: G::NAME.into(),
     })?;
@@ -646,8 +646,36 @@ mod test {
         for action in &mut actions {
             cleanup_action(action);
         }
+        #[cfg(feature = "strip-trailing-zeroes")]
         assert_eq!(
-            serde_json::to_string(&actions).unwrap(),
+            crate::to_string(&actions).unwrap(),
+            r#"[
+              {
+                "name": "move",
+                "description": "test 1",
+                "schema": {
+                  "type": "object",
+                  "required": [ "x", "y" ],
+                  "properties": {
+                    "x": { "type": "integer", "format": "uint32", "minimum": 0 },
+                    "y": { "type": "integer", "format": "uint32", "minimum": 0 }
+                  }
+                }
+              },
+              {
+                "name": "shoot",
+                "description": "test 2",
+                "schema": {
+                  "type": "null"
+                }
+              }
+            ]"#
+            .to_string()
+            .replace(|x| x == ' ' || x == '\n', "")
+        );
+        #[cfg(not(feature = "strip-trailing-zeroes"))]
+        assert_eq!(
+            crate::to_string(&actions).unwrap(),
             r#"[
               {
                 "name": "move",

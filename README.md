@@ -17,6 +17,10 @@ Optionally, a `proposals` feature is available that enables proposed
 commands that have not yet been accepted or implemented - you can use it
 for testing, but the feature is excluded from semver guarantees.
 
+Another feature is `strip-trailing-zeroes`, which strips `.0` from round
+floating point numbers, it may be useful for slightly reducing
+schema/context size.
+
 ## Changelog
 
 - 0.1.0 - initial release
@@ -29,6 +33,7 @@ for testing, but the feature is excluded from semver guarantees.
 - 0.4.0 - convert `Api` from a separate object into a sealed trait
 - 0.4.1 - interpret whitespace-only messages as null
 - 0.4.2 - cleanup action schemas in `register_actions_raw`
+- 0.4.3 - add the `strip-trailing-zeroes` feature
 
 ## License
 

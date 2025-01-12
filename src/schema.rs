@@ -157,7 +157,7 @@ mod tests {
 
     fn ser<T: serde::Serialize>(x: &T) -> String {
         // its easier to work with string slices and this is tests dont judge ok?
-        serde_json::to_string(x).unwrap()
+        crate::to_string(x).unwrap()
     }
 
     #[test]
