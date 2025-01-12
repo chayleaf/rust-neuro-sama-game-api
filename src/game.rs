@@ -17,7 +17,6 @@ use crate::schema::{self, ClientCommandContents, ServerCommand};
 mod glue;
 
 pub use glue::{ActionMetadata, Actions};
-use schemars::schema::{InstanceType, Schema, SchemaObject, SingleOrVec};
 use thiserror::Error;
 
 /// A trait to be implemented by your game to create an [`Api`] object.
@@ -250,84 +249,21 @@ pub trait Action: schemars::JsonSchema {
 }
 
 fn cleanup_action(action: &mut schema::Action) {
-    fn visit_schema(schema: &mut Schema) {
-        match schema {
-            Schema::Object(obj) => visit_schema_obj(obj),
-            Schema::Bool(_) => {}
-        }
-    }
-
-    fn visit_schema_obj(schema: &mut SchemaObject) {
-        if let Some(meta) = schema.metadata.as_mut() {
-            meta.description = None;
-            meta.title = None;
-        }
-        if let Some(arr) = schema.array.as_mut() {
-            for x in &mut arr.items {
-                match x {
-                    SingleOrVec::Single(schema) => visit_schema(schema),
-                    SingleOrVec::Vec(schemas) => {
-                        for schema in schemas {
-                            visit_schema(schema);
-                        }
-                    }
-                }
-            }
-            for x in arr
-                .contains
-                .iter_mut()
-                .chain(arr.additional_items.iter_mut())
-            {
-                visit_schema(x);
-            }
-        }
-        if let Some(obj) = schema.object.as_mut() {
-            for schema in obj
-                .properties
-                .values_mut()
-                .chain(obj.pattern_properties.values_mut())
-                .chain(
-                    obj.additional_properties
-                        .iter_mut()
-                        .chain(obj.property_names.iter_mut())
-                        .map(|x| &mut **x),
-                )
-            {
-                visit_schema(schema);
-            }
-        }
-        if let Some(sub) = schema.subschemas.as_mut() {
-            for schema in sub
-                .all_of
-                .iter_mut()
-                .chain(sub.any_of.iter_mut())
-                .chain(sub.one_of.iter_mut())
-                .flat_map(|x| x.iter_mut())
-                .chain(
-                    sub.not
-                        .iter_mut()
-                        .chain(sub.if_schema.iter_mut())
-                        .chain(sub.then_schema.iter_mut())
-                        .chain(sub.else_schema.iter_mut())
-                        .map(|x| &mut **x),
-                )
-            {
-                visit_schema(schema);
-            }
-        }
-    }
-    action.schema.meta_schema = None;
-    visit_schema_obj(&mut action.schema.schema);
-    match &action.schema.schema.instance_type {
-        Some(SingleOrVec::Single(x)) if **x == InstanceType::Null => {
-            action.schema.schema.instance_type = None;
-        }
-        _ => {}
-    }
+    action.schema.remove("$schema");
+    action.schema.remove("title");
+    action.schema.remove("description");
+    schemars::transform::transform_subschemas(
+        &mut |schema: &mut schemars::Schema| {
+            schema.remove("$schema");
+            schema.remove("title");
+            schema.remove("description");
+        },
+        &mut action.schema,
+    );
 }
 
 fn send_ws_command<G: Game>(game: &G, cmd: schema::ClientCommandContents) -> Result<(), Error> {
-    let data = crate::to_string(&schema::ClientCommand {
+    let data = serde_json::to_string(&schema::ClientCommand {
         command: cmd,
         game: G::NAME.into(),
     })?;
@@ -339,7 +275,7 @@ fn send_ws_command_mut<G: GameMut>(
     game: &mut G,
     cmd: schema::ClientCommandContents,
 ) -> Result<(), Error> {
-    let data = crate::to_string(&schema::ClientCommand {
+    let data = serde_json::to_string(&schema::ClientCommand {
         command: cmd,
         game: G::NAME.into(),
     })?;
@@ -666,47 +602,19 @@ mod test {
         for action in &mut actions {
             cleanup_action(action);
         }
-        #[cfg(feature = "strip-trailing-zeroes")]
         assert_eq!(
-            crate::to_string(&actions).unwrap(),
+            serde_json::to_string(&actions).unwrap(),
             r#"[
               {
                 "name": "move",
                 "description": "test 1",
                 "schema": {
                   "type": "object",
-                  "required": [ "x", "y" ],
                   "properties": {
                     "x": { "type": "integer", "format": "uint32", "minimum": 0 },
                     "y": { "type": "integer", "format": "uint32", "minimum": 0 }
-                  }
-                }
-              },
-              {
-                "name": "shoot",
-                "description": "test 2",
-                "schema": {
-                  "type": "null"
-                }
-              }
-            ]"#
-            .to_string()
-            .replace(|x| x == ' ' || x == '\n', "")
-        );
-        #[cfg(not(feature = "strip-trailing-zeroes"))]
-        assert_eq!(
-            crate::to_string(&actions).unwrap(),
-            r#"[
-              {
-                "name": "move",
-                "description": "test 1",
-                "schema": {
-                  "type": "object",
-                  "required": [ "x", "y" ],
-                  "properties": {
-                    "x": { "type": "integer", "format": "uint32", "minimum": 0.0 },
-                    "y": { "type": "integer", "format": "uint32", "minimum": 0.0 }
-                  }
+                  },
+                  "required": [ "x", "y" ]
                 }
               },
               {

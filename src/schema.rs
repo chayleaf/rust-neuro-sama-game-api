@@ -12,7 +12,7 @@ pub struct Action {
     pub description: Cow<'static, str>,
     /// A **valid** simple JSON schema object that describes how the response data should look like. If your action does not have any parameters, you can omit this field or set it to `{}`.
     #[serde(default)]
-    pub schema: schemars::schema::RootSchema,
+    pub schema: schemars::Schema,
 }
 
 /// Client command contents (everything except the `game` field). See `ClientCommand` docs for more
@@ -147,7 +147,7 @@ pub enum ServerCommand {
 
 #[cfg(test)]
 mod tests {
-    use schemars::schema::{InstanceType, Schema, SingleOrVec};
+    use serde_json::json;
 
     use super::*;
 
@@ -157,7 +157,7 @@ mod tests {
 
     fn ser<T: serde::Serialize>(x: &T) -> String {
         // its easier to work with string slices and this is tests dont judge ok?
-        crate::to_string(x).unwrap()
+        serde_json::to_string(x).unwrap()
     }
 
     #[test]
@@ -175,19 +175,17 @@ mod tests {
         // yes schema
         const SAMPLE3: &str = r#"{"name":"test","description":"abcd","schema":{"type":"object","properties":{"test":{"type":"string"}},"required":["test"]}}"#;
         let c: Action = parse(SAMPLE3);
-        let schema = c.schema.schema;
-        assert!(
-            matches!(schema.instance_type.as_ref().unwrap(), SingleOrVec::Single(x) if **x == InstanceType::Object)
-        );
-        let object_schema = schema.object.unwrap();
-        assert!(object_schema.required.contains("test"));
-        let Schema::Object(prop_schema) = object_schema.properties.get("test").unwrap() else {
-            panic!()
-        };
-        assert!(
-            matches!(prop_schema.instance_type.as_ref().unwrap(), SingleOrVec::Single(x) if **x == InstanceType::String)
-        );
-        assert!(object_schema.required.contains("test"));
+        let schema = c.schema;
+        assert_eq!(schema.get("type").unwrap(), &json!("object"));
+        assert_eq!(schema.get("required").unwrap(), &json!(["test"]));
+        let prop_schema = schema
+            .get("properties")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .get("test")
+            .unwrap();
+        assert_eq!(prop_schema.get("type").unwrap(), &json!("string"));
     }
 
     #[test]

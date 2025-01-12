@@ -1,6 +1,6 @@
 [package]
 name = "neuro-sama"
-version = "0.4.6"
+version = "0.5.0-alpha.1"
 edition = "2021"
 authors = ["chayleaf <chayleaf-cratesio@pavluk.org>"]
 description = "A crate that implements the Neuro-sama game API"
@@ -14,7 +14,7 @@ members = ["test-game", "neuro-sama-derive", "neuro-simulator"]
 
 [dependencies]
 json5 = "0.4.1"
-schemars = { version = "0.8.21", default-features = false }
+schemars = { version = "1.0.0-alpha", default-features = false }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 tungstenite = { version = "0.*", default-features = false }
@@ -22,10 +22,8 @@ neuro-sama-derive = { version = "0.1.1", path = "./neuro-sama-derive" }
 thiserror = "2.0.6"
 
 [dev-dependencies]
-schemars = "0.8.21"
+schemars = "1.0.0-alpha"
 
 [features]
 proposals = []
 default = []
-# strip the .0 in 0.0 or 1.0
-strip-trailing-zeroes = []
