@@ -17,10 +17,6 @@ Optionally, a `proposals` feature is available that enables proposed
 commands that have not yet been accepted or implemented - you can use it
 for testing, but the feature is excluded from semver guarantees.
 
-Another feature is `strip-trailing-zeroes`, which strips `.0` from round
-floating point numbers, it may be useful for slightly reducing
-schema/context size.
-
 ## Changelog
 
 - 0.1.0 - initial release

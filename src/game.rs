@@ -252,11 +252,13 @@ fn cleanup_action(action: &mut schema::Action) {
     action.schema.remove("$schema");
     action.schema.remove("title");
     action.schema.remove("description");
+    action.schema.remove("format");
     schemars::transform::transform_subschemas(
         &mut |schema: &mut schemars::Schema| {
             schema.remove("$schema");
             schema.remove("title");
             schema.remove("description");
+            schema.remove("format");
         },
         &mut action.schema,
     );
