@@ -34,6 +34,7 @@ schema/context size.
 - 0.4.1 - interpret whitespace-only messages as null
 - 0.4.2 - cleanup action schemas in `register_actions_raw`
 - 0.4.3 - add the `strip-trailing-zeroes` feature
+- 0.4.4 - fix invalid name for `action/result`
 
 ## License
 

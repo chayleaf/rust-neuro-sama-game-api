@@ -2259,7 +2259,7 @@ dependencies = [
 
 [[package]]
 name = "neuro-sama"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "json5",
  "neuro-sama-derive",

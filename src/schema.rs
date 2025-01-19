@@ -69,7 +69,7 @@ pub enum ClientCommandContents {
     /// # Tip
     ///
     /// Since setting `success` to false will retry the action force if there was one, if the action was not successful but you don't want it to be retried, you should set `success` to `true` and provide an error message in the `message` field.
-    #[serde(rename = "actions/result")]
+    #[serde(rename = "action/result")]
     ActionResult {
         /// The id of the action that this result is for. This is grabbed from the action message directly.
         id: String,
