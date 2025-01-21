@@ -17,7 +17,7 @@ use crate::schema::{self, ClientCommandContents, ServerCommand};
 mod glue;
 
 pub use glue::{ActionMetadata, Actions};
-use schemars::schema::{Schema, SchemaObject, SingleOrVec};
+use schemars::schema::{InstanceType, Schema, SchemaObject, SingleOrVec};
 use thiserror::Error;
 
 /// A trait to be implemented by your game to create an [`Api`] object.
@@ -318,6 +318,12 @@ fn cleanup_action(action: &mut schema::Action) {
     }
     action.schema.meta_schema = None;
     visit_schema_obj(&mut action.schema.schema);
+    match &action.schema.schema.instance_type {
+        Some(SingleOrVec::Single(x)) if **x == InstanceType::Null => {
+            action.schema.schema.instance_type = None;
+        }
+        _ => {}
+    }
 }
 
 fn send_ws_command<G: Game>(game: &G, cmd: schema::ClientCommandContents) -> Result<(), Error> {
@@ -462,10 +468,21 @@ pub trait Api: Game {
                             serde::de::value::UnitDeserializer::new(),
                         )
                     },
-                    |data| {
-                        json5::Deserializer::from_str(data).and_then(|mut de| {
-                            <Self::Actions<'_> as Actions>::deserialize(&name, &mut de)
-                        })
+                    |data| match json5::Deserializer::from_str(data) {
+                        Ok(mut de) => <Self::Actions<'_> as Actions>::deserialize(&name, &mut de),
+                        Err(err) => {
+                            let mut data = data.clone();
+                            data.retain(|x| !x.is_whitespace());
+                            if data.is_empty() || data == "{}" {
+                                <Self::Actions<'_> as Actions>::deserialize(
+                                    &name,
+                                    serde::de::value::UnitDeserializer::new(),
+                                )
+                                .map_err(|_: serde_json::Error| err)
+                            } else {
+                                Err(err)
+                            }
+                        }
                     },
                 );
                 let data = match res {
