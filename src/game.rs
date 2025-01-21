@@ -468,21 +468,24 @@ pub trait Api: Game {
                             serde::de::value::UnitDeserializer::new(),
                         )
                     },
-                    |data| match json5::Deserializer::from_str(data) {
-                        Ok(mut de) => <Self::Actions<'_> as Actions>::deserialize(&name, &mut de),
-                        Err(err) => {
-                            let mut data = data.clone();
-                            data.retain(|x| !x.is_whitespace());
-                            if data.is_empty() || data == "{}" {
-                                <Self::Actions<'_> as Actions>::deserialize(
-                                    &name,
-                                    serde::de::value::UnitDeserializer::new(),
-                                )
-                                .map_err(|_: serde_json::Error| err)
-                            } else {
-                                Err(err)
-                            }
-                        }
+                    |data| {
+                        json5::Deserializer::from_str(data)
+                            .and_then(|mut de| {
+                                <Self::Actions<'_> as Actions>::deserialize(&name, &mut de)
+                            })
+                            .or_else(|err| {
+                                let mut data = data.clone();
+                                data.retain(|x| !x.is_whitespace());
+                                if data.is_empty() || data == "{}" {
+                                    <Self::Actions<'_> as Actions>::deserialize(
+                                        &name,
+                                        serde::de::value::UnitDeserializer::new(),
+                                    )
+                                    .map_err(|_: json5::Error| err)
+                                } else {
+                                    Err(err)
+                                }
+                            })
                     },
                 );
                 let data = match res {

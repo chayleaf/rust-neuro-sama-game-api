@@ -36,6 +36,7 @@ schema/context size.
 - 0.4.3 - add the `strip-trailing-zeroes` feature
 - 0.4.4 - fix invalid name for `action/result`
 - 0.4.5 - consider `null` schemas equivalent to untyped `{}`
+- 0.4.6 - fix `{}` not being valid input for `null` schemas
 
 ## License
 
