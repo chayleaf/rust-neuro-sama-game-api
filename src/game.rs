@@ -253,6 +253,9 @@ fn cleanup_action(action: &mut schema::Action) {
     action.schema.remove("title");
     action.schema.remove("description");
     action.schema.remove("format");
+    if matches!(action.schema.get("type"), Some(serde_json::Value::String(x)) if x == "null") {
+        action.schema.remove("type");
+    }
     schemars::transform::transform_subschemas(
         &mut |schema: &mut schemars::Schema| {
             schema.remove("$schema");
@@ -613,8 +616,8 @@ mod test {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "x": { "type": "integer", "format": "uint32", "minimum": 0 },
-                    "y": { "type": "integer", "format": "uint32", "minimum": 0 }
+                    "x": { "type": "integer", "minimum": 0 },
+                    "y": { "type": "integer", "minimum": 0 }
                   },
                   "required": [ "x", "y" ]
                 }
@@ -623,7 +626,6 @@ mod test {
                 "name": "shoot",
                 "description": "test 2",
                 "schema": {
-                  "type": "null"
                 }
               }
             ]"#
